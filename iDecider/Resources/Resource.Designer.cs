@@ -45,7 +45,25 @@ namespace iDecider
 		{
 			
 			// aapt resource value: 0x7f020000
-			public const int Icon = 2130837504;
+			public const int ic_action_content_create = 2130837504;
+			
+			// aapt resource value: 0x7f020001
+			public const int ic_action_content_save = 2130837505;
+			
+			// aapt resource value: 0x7f020002
+			public const int ic_menu_copy_holo_dark = 2130837506;
+			
+			// aapt resource value: 0x7f020003
+			public const int ic_menu_cut_holo_dark = 2130837507;
+			
+			// aapt resource value: 0x7f020004
+			public const int ic_menu_paste_holo_dark = 2130837508;
+			
+			// aapt resource value: 0x7f020005
+			public const int ic_menu_search_holo_dark = 2130837509;
+			
+			// aapt resource value: 0x7f020006
+			public const int Icon = 2130837510;
 			
 			static Drawable()
 			{
@@ -60,14 +78,26 @@ namespace iDecider
 		public partial class Id
 		{
 			
-			// aapt resource value: 0x7f060001
-			public const int btnAddItem = 2131099649;
+			// aapt resource value: 0x7f080002
+			public const int btnAddAlternative = 2131230722;
 			
-			// aapt resource value: 0x7f060000
-			public const int btnGo = 2131099648;
+			// aapt resource value: 0x7f080001
+			public const int btnGo = 2131230721;
 			
-			// aapt resource value: 0x7f060002
-			public const int textView1 = 2131099650;
+			// aapt resource value: 0x7f080004
+			public const int menu_edit = 2131230724;
+			
+			// aapt resource value: 0x7f080006
+			public const int menu_preferences = 2131230726;
+			
+			// aapt resource value: 0x7f080005
+			public const int menu_save = 2131230725;
+			
+			// aapt resource value: 0x7f080003
+			public const int textView1 = 2131230723;
+			
+			// aapt resource value: 0x7f080000
+			public const int toolbar = 2131230720;
 			
 			static Id()
 			{
@@ -85,12 +115,31 @@ namespace iDecider
 			// aapt resource value: 0x7f040000
 			public const int Main = 2130968576;
 			
+			// aapt resource value: 0x7f040001
+			public const int toolbar = 2130968577;
+			
 			static Layout()
 			{
 				global::Android.Runtime.ResourceIdManager.UpdateIdValues();
 			}
 			
 			private Layout()
+			{
+			}
+		}
+		
+		public partial class Menu
+		{
+			
+			// aapt resource value: 0x7f070000
+			public const int top_menus = 2131165184;
+			
+			static Menu()
+			{
+				global::Android.Runtime.ResourceIdManager.UpdateIdValues();
+			}
+			
+			private Menu()
 			{
 			}
 		}
@@ -126,6 +175,22 @@ namespace iDecider
 			}
 			
 			private String()
+			{
+			}
+		}
+		
+		public partial class Style
+		{
+			
+			// aapt resource value: 0x7f060000
+			public const int MyTheme = 2131099648;
+			
+			static Style()
+			{
+				global::Android.Runtime.ResourceIdManager.UpdateIdValues();
+			}
+			
+			private Style()
 			{
 			}
 		}
