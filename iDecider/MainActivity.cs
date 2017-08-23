@@ -5,79 +5,58 @@ using System.Collections.Generic;
 using System;
 using Android.Views;
 using System.Linq;
-using Android.Views.InputMethods;
-using Android.Graphics;
+using Newtonsoft.Json;
+using Android.Content;
 
 namespace iDecider
 {
-    public static class Persistents
-    {
-        public static List<Alternative> alternatives = new List<Alternative>();
-    }
-    public class Alternative
-    {
-        public string Text { get; set; }
-        public bool Active { get; set; } = true;
-    }
-    class AlternativeListAdapter : BaseAdapter<Alternative>
-    {
-        List<Alternative> alternatives { get { return Persistents.alternatives; } }
-        Activity context;
-        public AlternativeListAdapter(Activity context, List<Alternative> alternatives) : base()
-        {
-            this.context = context;
-            Persistents.alternatives = alternatives;
-        }
 
-        public override long GetItemId(int position)
-        {
-            return position;
-        }
-        public override Alternative this[int position]
-        {
-            get { return alternatives[position]; }
-        }
-        public void Add(Alternative alternative)
-        {
-            alternatives.Add(alternative);
-        }
-        public override int Count
-        {
-            get { return alternatives.Count; }
-        }
-        public override View GetView(int position, View convertView, ViewGroup parent)
-        {
-            View view = convertView;
-            if (view == null)
-                view = context.LayoutInflater.Inflate(Android.Resource.Layout.SimpleListItem1, null);
-            var txt = view.FindViewById<TextView>(Android.Resource.Id.Text1);
-            txt.Text = alternatives[position].Text;
-            var color = alternatives[position].Active ? Color.Black : Color.Gray;
-            txt.SetTextColor(color);
-
-            return view;
-        }
-    }
-
-
-    [Activity(Label = "iDecider", MainLauncher = true, Icon = "@mipmap/icon")]
+    [Activity(Label = "@string/app_name", MainLauncher = true, Icon = "@mipmap/icon")]
     public class MainActivity : Activity
     {
+        string ListNamesKey { get { return Resources.GetString(Resource.String.list_names); } }
+        List<Alternative> alternatives { get; set; }
 
-        List<Alternative> alternatives { get { return Persistents.alternatives; } }
-        protected override void OnCreate(Bundle savedInstanceState)
+        protected override void OnSaveInstanceState(Bundle outState)
         {
-            base.OnCreate(savedInstanceState);
-            Title = "iDecider";
+
+            base.OnSaveInstanceState(outState);
+            var alts = JsonConvert.SerializeObject(alternatives);
+
+            outState.PutString("alts", alts);
+
+        }
+        protected override void OnCreate(Bundle bundle)
+        {
+            base.OnCreate(bundle);
+
+            if (bundle == null)
+            {
+                var firstTime = !LoadPreference<bool>("iExist");
+                if (firstTime)
+                {
+                    //first time starting app
+                    SaveList(ListNamesKey, "");
+                    SavePreference("iExist", true);
+                }
+
+                var listNames = LoadPreference<string>(ListNamesKey).FromJson<List<string>>();
+                var loaded = LoadList(listNames.First());
+            }
+            else
+            {
+                alternatives = bundle.GetString("alts").FromJson<List<Alternative>>();
+            }
             // Set our view from the "main" layout resource
             SetContentView(Resource.Layout.Main);
 
-            //var toolbar = FindViewById<Toolbar>(Resource.Id.toolbar);
-            //SetActionBar(toolbar);
-            //ActionBar.Title = "iDecider";
-
-            var btnGo = FindViewById<Button>(Resource.Id.btnGo);
-            var btnAdd = FindViewById<Button>(Resource.Id.btnAddAlternative);
+            var toolbar = FindViewById<Toolbar>(Resource.Id.toolbar);
+            SetActionBar(toolbar);
+            ActionBar.Title = Resources.GetString(Resource.String.app_name);
+            CreateAlternativesListView();
+        }
+        public void CreateAlternativesListView()
+        {
             ListView list = FindViewById<ListView>(Android.Resource.Id.List);
 
             list.Adapter = new AlternativeListAdapter(this, alternatives);
@@ -89,80 +68,149 @@ namespace iDecider
 
                 var alt = alternatives[args.Position];
                 var alert = new AlertDialog.Builder(this);
-                alert.SetTitle("Edit alternative");
                 var text = new EditText(this);
-                text.Text = alt.Text;
                 var slider = new Switch(this);
-                slider.Text = "Activated";
-                slider.Checked = alt.Active;
+
                 slider.SetPadding(30, 30, 30, 30);
+
+                alert.SetTitle("Edit");
+                text.Text = alt.Text;
+                slider.Text = "Active";
+                slider.Checked = alt.Active;
+
                 layout.AddView(text);
                 layout.AddView(slider);
                 alert.SetView(layout);
+
                 alert.SetPositiveButton("Done", (sender, e) =>
                 {
                     if (!string.IsNullOrEmpty(text.Text.Trim()))
                         alt.Text = text.Text.Trim();
                     alt.Active = slider.Checked;
-                    (list.Adapter as AlternativeListAdapter).NotifyDataSetChanged();
+                    RedrawAlternatives();
                 });
                 alert.SetNeutralButton("Cancel", (sender, e) => { });
                 alert.SetNegativeButton("Delete", (sender, e) =>
                 {
                     alternatives.Remove(alt);
-                    (list.Adapter as AlternativeListAdapter).NotifyDataSetChanged();
+                    RedrawAlternatives();
                 });
-                alert.Show();
-            };
 
-            btnGo.Click += (obj, args) =>
-            {
-                var alert = new AlertDialog.Builder(this);
-                string result;
-                if (alternatives.Any(a => a.Active))
-                    result = alternatives.Where(a => a.Active).OrderBy(x => Guid.NewGuid()).First().Text;
-                else
-                {
-                    result = (Guid.NewGuid().ToByteArray().First()) % 2 == 0 ? "Yes" : "No";
-                    alert.SetMessage("Default Yes/No when no items in the list are Activated");
-                }
-
-                alert.SetTitle(result);
-                alert.SetPositiveButton("OK", (x, y) => { });
                 alert.Show();
-            };
-            btnAdd.Click += (x, y) =>
-            {
-                PromptAddAlternative(list);
             };
         }
-        public void PromptAddAlternative(ListView list)
+        public void Go()
         {
-            var txtAlternative = new EditText(this);
             var alert = new AlertDialog.Builder(this);
-            alert.SetTitle("Enter alternative:");
+            if (alternatives.Any(a => a.Active))
+            {
+                alternatives.ForEach(a => a.Selected = false);
+                var alt = alternatives.Where(a => a.Active).OrderBy(x => Guid.NewGuid()).First();
+
+                alt.Selected = true;
+                RedrawAlternatives();
+
+                alert.SetTitle(alt.Text);
+                alert.SetPositiveButton("Ok", (x, y) => { });
+                alert.Show();
+
+            }
+            else
+            {
+                Toast.MakeText(this, "No alternatives available!", ToastLength.Long).Show();
+            }
+
+        }
+        public void PromptAddAlternative()
+        {
+            var text = new EditText(this);
+            var alert = new AlertDialog.Builder(this);
+            alert.SetTitle("New");
             alert.SetPositiveButton("Done", (senderAlert, args) =>
             {
-                string text = txtAlternative.Text.Trim();
-                string toastMessage;
-                if (text.Length == 0)
-                    toastMessage = "Input cannot be empty";
-                //else if (alternatives.Any(a => a.Text == text))
-                //    toastMessage = "Alternative already in list";
+                text.Text = text.Text.Trim();
+                if (string.IsNullOrWhiteSpace(text.Text))
+                {
+                    Toast.MakeText(this, "Input cannot be empty", ToastLength.Long).Show();
+                }
                 else
                 {
-
-                    alternatives.Add(new Alternative { Text = text });
-                    (list.Adapter as AlternativeListAdapter).NotifyDataSetChanged();
-                    toastMessage = $"'{text}' added";
+                    alternatives.Add(new Alternative { Text = text.Text.Trim() });
+                    RedrawAlternatives();
                 }
 
-                Toast.MakeText(this, toastMessage, ToastLength.Short).Show();
             });
             alert.SetNeutralButton("Cancel", (senderAlert, args) => Toast.MakeText(this, $"Cancelled", ToastLength.Short).Show());
-            alert.SetView(txtAlternative);
-            txtAlternative.Text = "";
+            alert.SetView(text);
             alert.Show();
+        }
+
+        public void RedrawAlternatives()
+        {
+            var list = FindViewById<ListView>(Android.Resource.Id.List);
+            (list.Adapter as AlternativeListAdapter).NotifyDataSetChanged();
+        }
+        public void RemoveAlternatives()
+        {
+            alternatives.Clear();
+            RedrawAlternatives();
+        }
+        public void SaveList(string name, string listAsJson)
+        {
+            var listkey = Resources.GetString(Resource.String.list_names);
+            var listnames = LoadPreference<List<string>>(ListNamesKey);
+            listnames.Add(name);
+            SavePreference(ListNamesKey, listnames.AsJson());
+
+            var key = $"list:{name}";
+            if (alternatives.Count > 0)
+                SavePreference(key, listAsJson);
+            else
+                RemovePreference(key);
+        }
+        public List<Alternative> LoadList(string name)
+        {
+            var key = $"list:{name}";
+            return LoadPreference<List<Alternative>>(key) ?? new List<Alternative>();
+        }
+        public void SavePreference<T>(string key, T value)
+        {
+            var prefs = GetSharedPreferences(PackageName, FileCreationMode.Private);
+            var prefEditor = prefs.Edit();
+            if (typeof(T) == typeof(string))
+                prefEditor.PutString(key, (dynamic)value);
+            else if (typeof(T) == typeof(bool))
+                prefEditor.PutBoolean(key, (dynamic)value);
+            else if (typeof(T) == typeof(int))
+                prefEditor.PutInt(key, (dynamic)value);
+            else if (typeof(T) == typeof(float))
+                prefEditor.PutFloat(key, (dynamic)value);
+            else
+                prefEditor.PutString(key, JsonConvert.SerializeObject(value));
+            prefEditor.Commit();
+
+        }
+        public void RemovePreference(string key)
+        {
+            var prefs = GetSharedPreferences(PackageName, FileCreationMode.Private);
+            var prefEditor = prefs.Edit();
+            prefEditor.Remove(key);
+            prefEditor.Commit();
+
+        }
+        public T LoadPreference<T>(string key)
+        {
+            var prefs = GetSharedPreferences(PackageName, FileCreationMode.Private);
+            if (typeof(T) == typeof(string))
+                return (dynamic)prefs.GetString(key, string.Empty);
+            else if (typeof(T) == typeof(bool))
+                return (dynamic)prefs.GetBoolean(key, false);
+            else if (typeof(T) == typeof(int))
+                return (dynamic)prefs.GetInt(key, 0);
+            else if (typeof(T) == typeof(float))
+                return (dynamic)prefs.GetFloat(key, 0.0f);
+            else
+                return prefs.GetString(key, string.Empty).FromJson<T>();
         }
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
@@ -171,8 +219,44 @@ namespace iDecider
         }
         public override bool OnOptionsItemSelected(IMenuItem item)
         {
-            Toast.MakeText(this, "Action selected: " + item.TitleFormatted,
-                ToastLength.Short).Show();
+            switch (item.ItemId)
+            {
+                case Resource.Id.menu_addAlt:
+                    PromptAddAlternative();
+                    break;
+                case Resource.Id.menu_go:
+                    Go();
+                    break;
+                case Resource.Id.menu_removeAlts:
+                    RemoveAlternatives();
+                    break;
+                case Resource.Id.menu_save:
+                    var alert = new AlertDialog.Builder(this);
+                    alert.SetTitle("List name");
+                    var text = FindViewById<TextView>(Android.Resource.Id.Text1);
+                    text.Text = "";
+                    alert.SetView(text);
+                    alert.SetNeutralButton("Cancel", (sender, e) => { });
+                    alert.SetPositiveButton("Save", (sender, e) =>
+                    {
+                        string toastMessage;
+                        if (!string.IsNullOrWhiteSpace(text.Text))
+                        {
+                            SaveList(text.Text.Trim(), alternatives.AsJson());
+                            toastMessage = $"'{text.Text.Trim()}' saved";
+                        }
+                        else
+                        {
+                            toastMessage = "List name cannot be empty";
+                        }
+                        Toast.MakeText(this, toastMessage, ToastLength.Long).Show();
+                    });
+                    alert.Show();
+                    break;
+                default:
+                    Toast.MakeText(this, "Error", ToastLength.Short).Show();
+                    break;
+            }
             return base.OnOptionsItemSelected(item);
         }
     }

@@ -3,6 +3,8 @@
   <style name="MyTheme" parent="@android:style/Theme.Material.Light.DarkActionBar">
     <item name="android:windowNoTitle">true</item>
     <item name="android:windowActionBar">false</item>
-    <item name="android:colorPrimary">#5A8622</item>
+    <item name="android:colorPrimary">#00838F</item>
+    <!-- dark alternative 005662 -->
+    <!-- xamarin example color: #5A8622 -->
   </style>
 </resources>
