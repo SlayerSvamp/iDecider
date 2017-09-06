@@ -1,216 +1,164 @@
 ﻿using Android.App;
 using Android.Widget;
-using Android.OS;
 using System.Collections.Generic;
 using System;
 using Android.Views;
 using System.Linq;
 using Newtonsoft.Json;
 using Android.Content;
+using SQLite;
+using System.IO;
 
 namespace iDecider
 {
 
-    [Activity(Label = "@string/app_name", MainLauncher = true, Icon = "@mipmap/icon")]
+    [Activity(Label = "@string/app_name", MainLauncher = true, Icon = "@mipmap/icon", LaunchMode = Android.Content.PM.LaunchMode.SingleTask)]
     public class MainActivity : Activity
     {
-        string ListNamesKey { get { return Resources.GetString(Resource.String.list_names); } }
-        List<Alternative> alternatives { get; set; }
+        ItemList ItemList { get; set; }
 
-        protected override void OnSaveInstanceState(Bundle outState)
+        protected override void OnSaveInstanceState(Android.OS.Bundle outState)
         {
-
             base.OnSaveInstanceState(outState);
-            var alts = JsonConvert.SerializeObject(alternatives);
 
-            outState.PutString("alts", alts);
+            outState.PutString("ItemList", ItemList.AsJson());
 
         }
-        protected override void OnCreate(Bundle bundle)
+        protected override void OnCreate(Android.OS.Bundle bundle)
         {
             base.OnCreate(bundle);
-
+            SetContentView(Resource.Layout.Main);
+            Action endOfCreate = () => { };
+            var toolbar = FindViewById<Toolbar>(Resource.Id.toolbar);
+            SetActionBar(toolbar);
             if (bundle == null)
             {
-                var firstTime = !LoadPreference<bool>("iExist");
-                if (firstTime)
+                if (!PreferenceTools.Load<bool>("iExist"))
                 {
-                    //first time starting app
-                    SaveList(ListNamesKey, "");
-                    SavePreference("iExist", true);
+                    RequestedOrientation = Android.Content.PM.ScreenOrientation.Locked;
+                    endOfCreate += () => {
+                        var alert = new AlertDialog.Builder(this);
+                        var text = new TextView(this);
+                        alert.SetView(text);
+                        alert.SetTitle("Welcome!");
+                        text.Text = "To use this app, just list the options for your decision making and let me be the decider.";
+                        text.SetPadding(48,48,48,48);
+                        alert.SetCancelable(false);
+                        alert.SetPositiveButton("Ok", (sender, e) => { RequestedOrientation = Android.Content.PM.ScreenOrientation.Unspecified; });
+                        
+                        alert.Show();
+                    };
+                    //first time starting app / if data is cleared
+                    PreferenceTools.Save("iExist", true);
+                    FirstTime();
+                }
+                var id = Intent.GetIntExtra("itemListId", -1);
+                if (id < 0)
+                {
+                    id = PreferenceTools.Load("startupListId", -1);
+                    using (var db = new SQLiteConnection(Database.Path))
+                    {
+                        if (!db.Table<ItemList>().Any(x => x.id == id))
+                        {
+                            id = db.Table<ItemList>().FirstOrDefault()?.id ?? -1;
+                        }
+                    }
+                }
+                PreferenceTools.Save("startupListId", id);
+                if (id < 0)
+                {
+                    Finish();
+                    StartActivity(typeof(ListManagerActivity));
+                    return;
                 }
 
-                var listNames = LoadPreference<string>(ListNamesKey).FromJson<List<string>>();
-                var loaded = LoadList(listNames.First());
+                using (var db = new SQLiteConnection(Database.Path))
+                {
+                    ItemList = db.Get<ItemList>(id);
+                }
             }
             else
             {
-                alternatives = bundle.GetString("alts").FromJson<List<Alternative>>();
+                ItemList = bundle.GetString("ItemList").FromJson<ItemList>();
             }
-            // Set our view from the "main" layout resource
-            SetContentView(Resource.Layout.Main);
 
-            var toolbar = FindViewById<Toolbar>(Resource.Id.toolbar);
-            SetActionBar(toolbar);
-            ActionBar.Title = Resources.GetString(Resource.String.app_name);
-            CreateAlternativesListView();
+            ActionBar.Title = ItemList.Name;
+            //has to be after loading ItemList
+            CreateItemListView();
+            RedrawList();
+            endOfCreate();
         }
-        public void CreateAlternativesListView()
+        public void FirstTime()
+        {
+
+            var items = new List<Item>();
+            items.Add(new Item { Text = "Yes" });
+            items.Add(new Item { Text = "No" });
+            items.Add(new Item { Text = "Maybe", Active = false });
+
+            var list = new ItemList()
+            {
+                Name = "Example list",
+                JsonItems = items.AsJson()
+            };
+            using (var db = new SQLiteConnection(Database.Path))
+            {
+                db.CreateTable<ItemList>();
+                db.Insert(list);
+                PreferenceTools.Save("startupListId", list.id);
+            }
+        }
+        public void CreateItemListView()
         {
             ListView list = FindViewById<ListView>(Android.Resource.Id.List);
 
-            list.Adapter = new AlternativeListAdapter(this, alternatives);
+            list.Adapter = new ItemListAdapter(this, ItemList);
 
-            list.ItemClick += (item, args) =>
+            list.ItemClick += (sender, e) =>
             {
-                LinearLayout layout = new LinearLayout(this);
-                layout.Orientation = Orientation.Vertical;
+                var item = ItemList.Items[e.Position];
+                item.Active = !item.Active;
+                ItemList.SaveChanges();
+                RedrawList();
+            };
+            list.ItemLongClick += (sender, e) =>
+            {
+                var item = ItemList.Items[e.Position];
 
-                var alt = alternatives[args.Position];
                 var alert = new AlertDialog.Builder(this);
-                var text = new EditText(this);
-                var slider = new Switch(this);
+                var text = new EditText(this) { Text = item.Text };
 
-                slider.SetPadding(30, 30, 30, 30);
+                alert.SetView(text);
+                alert.SetTitle("Edit item");
 
-                alert.SetTitle("Edit");
-                text.Text = alt.Text;
-                slider.Text = "Active";
-                slider.Checked = alt.Active;
-
-                layout.AddView(text);
-                layout.AddView(slider);
-                alert.SetView(layout);
-
-                alert.SetPositiveButton("Done", (sender, e) =>
+                alert.SetPositiveButton("Done", (x, y) =>
                 {
-                    if (!string.IsNullOrEmpty(text.Text.Trim()))
-                        alt.Text = text.Text.Trim();
-                    alt.Active = slider.Checked;
-                    RedrawAlternatives();
+                    if (!string.IsNullOrWhiteSpace(text.Text))
+                    {
+                        item.Text = text.Text.Trim();
+                        ItemList.SaveChanges();
+                        RedrawList();
+                    }
+                    else
+                        Toast.MakeText(this, "Name cannot be empty", ToastLength.Long).Show();
+
                 });
-                alert.SetNeutralButton("Cancel", (sender, e) => { });
-                alert.SetNegativeButton("Delete", (sender, e) =>
+                alert.SetNeutralButton("Cancel", (x, y) => { });
+                alert.SetNegativeButton("Delete", (x, y) =>
                 {
-                    alternatives.Remove(alt);
-                    RedrawAlternatives();
+                    ItemList.Items.Remove(item);
+                    ItemList.SaveChanges();
+                    RedrawList();
                 });
 
                 alert.Show();
             };
         }
-        public void Go()
+        public void RedrawList()
         {
-            var alert = new AlertDialog.Builder(this);
-            if (alternatives.Any(a => a.Active))
-            {
-                alternatives.ForEach(a => a.Selected = false);
-                var alt = alternatives.Where(a => a.Active).OrderBy(x => Guid.NewGuid()).First();
-
-                alt.Selected = true;
-                RedrawAlternatives();
-
-                alert.SetTitle(alt.Text);
-                alert.SetPositiveButton("Ok", (x, y) => { });
-                alert.Show();
-
-            }
-            else
-            {
-                Toast.MakeText(this, "No alternatives available!", ToastLength.Long).Show();
-            }
-
-        }
-        public void PromptAddAlternative()
-        {
-            var text = new EditText(this);
-            var alert = new AlertDialog.Builder(this);
-            alert.SetTitle("New");
-            alert.SetPositiveButton("Done", (senderAlert, args) =>
-            {
-                text.Text = text.Text.Trim();
-                if (string.IsNullOrWhiteSpace(text.Text))
-                {
-                    Toast.MakeText(this, "Input cannot be empty", ToastLength.Long).Show();
-                }
-                else
-                {
-                    alternatives.Add(new Alternative { Text = text.Text.Trim() });
-                    RedrawAlternatives();
-                }
-
-            });
-            alert.SetNeutralButton("Cancel", (senderAlert, args) => Toast.MakeText(this, $"Cancelled", ToastLength.Short).Show());
-            alert.SetView(text);
-            alert.Show();
-        }
-
-        public void RedrawAlternatives()
-        {
+            ActionBar.Title = ItemList.Name;
             var list = FindViewById<ListView>(Android.Resource.Id.List);
-            (list.Adapter as AlternativeListAdapter).NotifyDataSetChanged();
-        }
-        public void RemoveAlternatives()
-        {
-            alternatives.Clear();
-            RedrawAlternatives();
-        }
-        public void SaveList(string name, string listAsJson)
-        {
-            var listkey = Resources.GetString(Resource.String.list_names);
-            var listnames = LoadPreference<List<string>>(ListNamesKey);
-            listnames.Add(name);
-            SavePreference(ListNamesKey, listnames.AsJson());
-
-            var key = $"list:{name}";
-            if (alternatives.Count > 0)
-                SavePreference(key, listAsJson);
-            else
-                RemovePreference(key);
-        }
-        public List<Alternative> LoadList(string name)
-        {
-            var key = $"list:{name}";
-            return LoadPreference<List<Alternative>>(key) ?? new List<Alternative>();
-        }
-        public void SavePreference<T>(string key, T value)
-        {
-            var prefs = GetSharedPreferences(PackageName, FileCreationMode.Private);
-            var prefEditor = prefs.Edit();
-            if (typeof(T) == typeof(string))
-                prefEditor.PutString(key, (dynamic)value);
-            else if (typeof(T) == typeof(bool))
-                prefEditor.PutBoolean(key, (dynamic)value);
-            else if (typeof(T) == typeof(int))
-                prefEditor.PutInt(key, (dynamic)value);
-            else if (typeof(T) == typeof(float))
-                prefEditor.PutFloat(key, (dynamic)value);
-            else
-                prefEditor.PutString(key, JsonConvert.SerializeObject(value));
-            prefEditor.Commit();
-
-        }
-        public void RemovePreference(string key)
-        {
-            var prefs = GetSharedPreferences(PackageName, FileCreationMode.Private);
-            var prefEditor = prefs.Edit();
-            prefEditor.Remove(key);
-            prefEditor.Commit();
-
-        }
-        public T LoadPreference<T>(string key)
-        {
-            var prefs = GetSharedPreferences(PackageName, FileCreationMode.Private);
-            if (typeof(T) == typeof(string))
-                return (dynamic)prefs.GetString(key, string.Empty);
-            else if (typeof(T) == typeof(bool))
-                return (dynamic)prefs.GetBoolean(key, false);
-            else if (typeof(T) == typeof(int))
-                return (dynamic)prefs.GetInt(key, 0);
-            else if (typeof(T) == typeof(float))
-                return (dynamic)prefs.GetFloat(key, 0.0f);
-            else
-                return prefs.GetString(key, string.Empty).FromJson<T>();
+            (list.Adapter as ItemListAdapter).NotifyDataSetChanged();
         }
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
@@ -221,43 +169,90 @@ namespace iDecider
         {
             switch (item.ItemId)
             {
-                case Resource.Id.menu_addAlt:
-                    PromptAddAlternative();
+                case Resource.Id.menu_goto_list_manager:
+                    Finish();
+                    StartActivity(typeof(ListManagerActivity));
                     break;
                 case Resource.Id.menu_go:
-                    Go();
+                    Go_Click();
                     break;
-                case Resource.Id.menu_removeAlts:
-                    RemoveAlternatives();
+                case Resource.Id.menu_add_item:
+                    Add_Click();
                     break;
-                case Resource.Id.menu_save:
-                    var alert = new AlertDialog.Builder(this);
-                    alert.SetTitle("List name");
-                    var text = FindViewById<TextView>(Android.Resource.Id.Text1);
-                    text.Text = "";
-                    alert.SetView(text);
-                    alert.SetNeutralButton("Cancel", (sender, e) => { });
-                    alert.SetPositiveButton("Save", (sender, e) =>
-                    {
-                        string toastMessage;
-                        if (!string.IsNullOrWhiteSpace(text.Text))
-                        {
-                            SaveList(text.Text.Trim(), alternatives.AsJson());
-                            toastMessage = $"'{text.Text.Trim()}' saved";
-                        }
-                        else
-                        {
-                            toastMessage = "List name cannot be empty";
-                        }
-                        Toast.MakeText(this, toastMessage, ToastLength.Long).Show();
-                    });
-                    alert.Show();
+                case Resource.Id.menu_rename:
+                    Rename_Click();
                     break;
                 default:
-                    Toast.MakeText(this, "Error", ToastLength.Short).Show();
+                    Toast.MakeText(this, "Error", ToastLength.Long).Show();
                     break;
             }
             return base.OnOptionsItemSelected(item);
+        }
+
+        public void Go_Click()
+        {
+            if (ItemList.HasActiveItems)
+            {
+                ItemList.Select();
+                var alert = new AlertDialog.Builder(this);
+                RedrawList();
+
+                alert.SetTitle(ItemList.Selected.Text);
+                alert.SetPositiveButton("Ok", (x, y) => { });
+                alert.Show();
+            }
+            else
+            {
+                Toast.MakeText(this, "No available items", ToastLength.Long).Show();
+            }
+
+        }
+        public void Add_Click()
+        {
+            var alert = new AlertDialog.Builder(this);
+            var text = new EditText(this);
+
+            alert.SetTitle("Add item");
+            alert.SetPositiveButton("Done", (senderAlert, args) =>
+            {
+                text.Text = text.Text.Trim();
+                if (!string.IsNullOrWhiteSpace(text.Text))
+                {
+                    ItemList.Items.Add(new Item { Text = text.Text.Trim() });
+                    ItemList.SaveChanges();
+                    RedrawList();
+                }
+                else
+                {
+                    Toast.MakeText(this, "Name cannot be empty", ToastLength.Long).Show();
+                }
+
+            });
+            alert.SetNeutralButton("Cancel", (senderAlert, args) => { });
+            alert.SetView(text);
+            alert.Show();
+        }
+        private void Rename_Click()
+        {
+            var alert = new AlertDialog.Builder(this);
+            var text = new EditText(this) { Text = ItemList.Name };
+            alert.SetTitle("Rename list");
+            alert.SetView(text);
+            alert.SetNeutralButton("Cancel", (sender, e) => { });
+            alert.SetPositiveButton("Done", (sender, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(text.Text))
+                {
+                    ItemList.Name = text.Text.Trim();
+                    ItemList.SaveChanges();
+                    RedrawList();
+                }
+                else
+                {
+                    Toast.MakeText(this, "Name cannot be empty", ToastLength.Long).Show();
+                }
+            });
+            alert.Show();
         }
     }
 }

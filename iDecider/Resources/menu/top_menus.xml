@@ -1,23 +1,22 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
   <item
-      android:id="@+id/menu_save"
-      android:icon="@drawable/ic_save_white_48dp"
-      android:showAsAction="ifRoom"
-      android:title="Save list"/>
+       android:id="@+id/menu_goto_list_manager"
+       android:showAsAction="never"
+       android:title="List manager..." />
   <item
       android:id="@+id/menu_go"
       android:icon="@drawable/ic_play_arrow_white_48dp"
       android:showAsAction="always"
       android:title="Decide!"/>
   <item
-      android:id="@+id/menu_addAlt"
+      android:id="@+id/menu_add_item"
       android:icon="@drawable/ic_add_white_48dp"
       android:showAsAction="always"
-      android:title="Add alternative"/>
+      android:title="Add item"/>
   <item
-       android:id="@+id/menu_removeAlts"
-       android:icon="@drawable/ic_clear_white_48dp"
-       android:showAsAction="never"
-       android:title="Remove all" />
+      android:id="@+id/menu_rename"
+      android:icon="@drawable/ic_edit_white_48dp"
+      android:showAsAction="ifRoom"
+      android:title="Rename list"/>
 </menu>
