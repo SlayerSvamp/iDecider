@@ -3,7 +3,7 @@
   <item
        android:id="@+id/menu_goto_list_manager"
        android:showAsAction="never"
-       android:title="List manager..." />
+       android:title="Lists..." />
   <item
       android:id="@+id/menu_go"
       android:icon="@drawable/ic_play_arrow_white_48dp"

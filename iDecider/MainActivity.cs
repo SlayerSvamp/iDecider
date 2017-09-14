@@ -12,7 +12,7 @@ using System.IO;
 namespace iDecider
 {
 
-    [Activity(Label = "@string/app_name", MainLauncher = true, Icon = "@mipmap/icon", LaunchMode = Android.Content.PM.LaunchMode.SingleTask)]
+    [Activity(Label = "@string/app_name", MainLauncher = true, Icon = "@mipmap/icon", LaunchMode = Android.Content.PM.LaunchMode.SingleTop)]
     public class MainActivity : Activity
     {
         ItemList ItemList { get; set; }
@@ -83,11 +83,13 @@ namespace iDecider
             }
 
             ActionBar.Title = ItemList.Name;
+            TitleColor = Android.Graphics.Color.White;
             //has to be after loading ItemList
             CreateItemListView();
             RedrawList();
             endOfCreate();
         }
+        
         public void FirstTime()
         {
 
@@ -113,7 +115,6 @@ namespace iDecider
             ListView list = FindViewById<ListView>(Android.Resource.Id.List);
 
             list.Adapter = new ItemListAdapter(this, ItemList);
-
             list.ItemClick += (sender, e) =>
             {
                 var item = ItemList.Items[e.Position];

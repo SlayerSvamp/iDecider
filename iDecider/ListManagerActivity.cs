@@ -13,7 +13,7 @@ using SQLite;
 
 namespace iDecider
 {
-    [Activity(Label = "iDecider - List Manager", LaunchMode = Android.Content.PM.LaunchMode.SingleTask)]
+    [Activity(Label = "iDecider - List Manager", LaunchMode = Android.Content.PM.LaunchMode.SingleTop)]
     public class ListManagerActivity : Activity
     {
         List<ItemList> Lists { get; set; }
@@ -22,24 +22,22 @@ namespace iDecider
             base.OnCreate(savedInstanceState);
 
             SetContentView(Resource.Layout.list_manager);
-            Title = "List Manager";
+            Title = "Lists";
+            TitleColor = Android.Graphics.Color.White;
 
             var toolbar = FindViewById<Toolbar>(Resource.Id.toolbar_list_manager);
             SetActionBar(toolbar);
-            using (var db = new SQLiteConnection(Database.Path))
-            {
-
-                Lists = db.Table<ItemList>().ToList();
-            }
 
             CreateListView();
         }
-
+        protected override void OnResume()
+        {
+            base.OnResume();
+            LoadList();
+        }
         public void CreateListView()
         {
-            ListView view = FindViewById<ListView>(Resource.Id.list_list);
-
-            view.Adapter = new ListListAdapter(this, Lists);
+            ListView view = LoadList();
 
             view.ItemClick += (sender, e) =>
             {
@@ -82,6 +80,16 @@ namespace iDecider
 
                 alert.Show();
             };
+        }
+        public ListView LoadList()
+        {
+            using (var db = new SQLiteConnection(Database.Path))
+            {
+                Lists = db.Table<ItemList>().ToList();
+                ListView view = FindViewById<ListView>(Resource.Id.list_list);
+                view.Adapter = new ListListAdapter(this, Lists);
+                return view;
+            }
         }
         public void RedrawList()
         {
