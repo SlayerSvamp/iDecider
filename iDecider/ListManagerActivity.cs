@@ -10,10 +10,11 @@ using Android.Runtime;
 using Android.Views;
 using Android.Widget;
 using SQLite;
+using Android.Content.PM;
 
 namespace iDecider
 {
-    [Activity(Label = "iDecider - List Manager", LaunchMode = Android.Content.PM.LaunchMode.SingleTop)]
+    [Activity(Label = "iDecider - List Manager", LaunchMode = LaunchMode.SingleTop, ScreenOrientation = ScreenOrientation.Portrait)]
     public class ListManagerActivity : Activity
     {
         List<ItemList> Lists { get; set; }

@@ -8,11 +8,11 @@ using Newtonsoft.Json;
 using Android.Content;
 using SQLite;
 using System.IO;
+using Android.Content.PM;
 
 namespace iDecider
 {
-
-    [Activity(Label = "@string/app_name", MainLauncher = true, Icon = "@mipmap/icon", LaunchMode = Android.Content.PM.LaunchMode.SingleTop)]
+    [Activity(Label = "@string/app_name", MainLauncher = true, Icon = "@mipmap/icon", LaunchMode = LaunchMode.SingleTop, ScreenOrientation = ScreenOrientation.Portrait)]
     public class MainActivity : Activity
     {
         ItemList ItemList { get; set; }
